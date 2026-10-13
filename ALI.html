@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RGB Dino vs Gunmen</title>
+<style>
+  html,body{margin:0;height:100%;background:#0e1116;color:#cfd6dd;font-family:system-ui,sans-serif}
+  body{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;padding:1rem;-webkit-user-select:none;user-select:none}
+  canvas{width:100%;max-width:900px;height:auto;background:#151a21;border-radius:12px;touch-action:none}
+  p{margin:0;font-size:.95rem;color:#8b96a1;text-align:center;line-height:1.5}
+</style>
+</head>
+<body>
+<canvas id="c" width="900" height="260"></canvas>
+<p>Tap the top half of the game to jump. Hold the bottom half to duck.<br>Keyboard: Space or Up to jump, Down to duck.</p>
+<script>
+const c=document.getElementById('c'),x=c.getContext('2d');
+const W=c.width,GROUND=215,PX=3;
+const BODY=[
+"..........#######.",
+"..........##e#####",
+"..........########",
+"..........########",
+"..........####....",
+"..........#######.",
+"#........####.....",
+"#.......#######...",
+"##.....#########..",
+"###...###########.",
+"###..#########.##.",
+".##.###########...",
+"..############....",
+"...##########....."];
+const LEGS=[
+["....####..####....","....##.....##.....","....##.....#......"],
+["....####..####....","....##......##....","....#.......##...."]];
+const BASE=[
+"....####....","....####....","....####....",".....##.....",
+"...######...","...######...","...######...","...######...",
+"...######...","...######...","...######...","...##..##...",
+"...##..##...","...##..##...","...##..##...","..###..###.."];
+function buildHuman(g){
+  const h=BASE.slice();
+  h[g]="gggggg####..";
+  h[g+1]="..g.######..";
+  return h;
+}
+const GUN_ROWS=[6,9];
+const HUMANS=GUN_ROWS.map(buildHuman);
+const HH=16*PX,HW=12*PX;
+let hi=0;try{hi=+localStorage.getItem('dinoHi')||0}catch(e){}
+let dino,obs,bullets,speed,score,over,started,frame,next,last=0,t=0;
+const input={duck:false};
+function reset(){
+  dino={y:GROUND,vy:0,on:true};
+  obs=[];bullets=[];speed=6;score=0;over=false;frame=0;next=80;
+}
+reset();started=false;
+function jump(){
+  if(over){reset();started=true;return}
+  started=true;
+  if(dino.on){dino.vy=-13.5;dino.on=false}
+}
+addEventListener('keydown',e=>{
+  if(e.code==='Space'||e.code==='ArrowUp'){e.preventDefault();jump()}
+  if(e.code==='ArrowDown'){e.preventDefault();input.duck=true}
+});
+addEventListener('keyup',e=>{if(e.code==='ArrowDown')input.duck=false});
+c.addEventListener('pointerdown',e=>{
+  e.preventDefault();
+  const r=c.getBoundingClientRect();
+  const ly=(e.clientY-r.top)/r.height;
+  if(!started||over||ly<=0.5)jump();
+  else input.duck=true;
+});
+addEventListener('pointerup',()=>{input.duck=false});
+addEventListener('pointercancel',()=>{input.duck=false});
+
+function sprite(px,py,color){
+  const all=BODY.concat(dino.on?LEGS[Math.floor(frame/6)%2]:LEGS[0]);
+  for(let r=0;r<all.length;r++)for(let k=0;k<all[r].length;k++){
+    const ch=all[r][k];
+    if(ch==='#'){x.fillStyle=color;x.fillRect(px+k*PX,py+r*PX,PX,PX)}
+    else if(ch==='e'){x.fillStyle='#151a21';x.fillRect(px+k*PX,py+r*PX,PX,PX)}
+  }
+}
+function drawHuman(o){
+  const rows=HUMANS[o.type],top=GROUND-HH;
+  for(let r=0;r<rows.length;r++)for(let k=0;k<rows[r].length;k++){
+    const ch=rows[r][k];
+    if(ch==='.')continue;
+    x.fillStyle=ch==='g'?'#b0bec5':r<4?'#e8b98a':r<11?'#c0392b':'#34495e';
+    x.fillRect(o.x+k*PX,top+r*PX,PX,PX);
+  }
+  if(o.flash>0){
+    x.fillStyle='#ffd54a';
+    x.fillRect(o.x-10,top+GUN_ROWS[o.type]*PX-3,9,9);
+  }
+}
+const DW=18*PX,DH=17*PX,DX=50;
+function update(s){
+  if(!started||over)return;
+  frame+=s;score+=speed*s*0.05;speed=Math.min(12,speed+0.0015*s);
+  const duck=input.duck&&dino.on;
+  dino.vy+=0.75*s*((input.duck&&!dino.on)?2.2:1);
+  dino.y+=dino.vy*s;
+  if(dino.y>=GROUND){dino.y=GROUND;dino.vy=0;dino.on=true}
+  next-=speed*s;
+  if(next<=0){
+    const type=Math.random()<0.5?0:1;
+    const first=W-120-Math.random()*220;
+    const fire=[first];
+    if(score>350&&Math.random()<0.5)fire.push(first-170);
+    obs.push({x:W+20,type,fire,flash:0});
+    next=380+Math.random()*300+speed*20;
+  }
+  for(const o of obs){
+    o.x-=speed*s;
+    if(o.flash>0)o.flash-=s;
+    while(o.fire.length&&o.x<o.fire[0]){
+      o.fire.shift();
+      bullets.push({x:o.x-12,y:GROUND-HH+GUN_ROWS[o.type]*PX+3});
+      o.flash=6;
+    }
+  }
+  for(const b of bullets)b.x-=(speed+5)*s;
+  obs=obs.filter(o=>o.x+HW+10>0);
+  bullets=bullets.filter(b=>b.x>-30);
+  const dx1=DX+8,dx2=DX+(duck?DW*1.25:DW)-8;
+  const dy1=dino.y-(duck?DH*0.55:DH)+6,dy2=dino.y;
+  let hit=false;
+  for(const o of obs){
+    if(dx2>o.x+6&&dx1<o.x+HW-4&&dy2>GROUND-HH)hit=true;
+  }
+  for(const b of bullets){
+    if(dx2>b.x&&dx1<b.x+14&&dy2>b.y-3&&dy1<b.y+3)hit=true;
+  }
+  if(hit){
+    over=true;
+    if(score>hi){hi=Math.floor(score);try{localStorage.setItem('dinoHi',hi)}catch(e){}}
+  }
+}
+function draw(){
+  x.clearRect(0,0,W,c.height);
+  x.fillStyle='#3a434d';x.fillRect(0,GROUND,W,2);
+  obs.forEach(drawHuman);
+  x.fillStyle='#ffd54a';
+  for(const b of bullets){
+    x.fillRect(b.x,b.y-3,14,6);
+    x.fillStyle='#ff8a3d';x.fillRect(b.x+10,b.y-3,4,6);x.fillStyle='#ffd54a';
+  }
+  const col=`hsl(${(t*0.12)%360},100%,58%)`;
+  if(input.duck&&dino.on){
+    x.save();x.translate(DX,dino.y);x.scale(1.25,0.55);sprite(0,-DH,col);x.restore();
+  }else sprite(DX,dino.y-DH,col);
+  x.fillStyle='#8b96a1';x.font='20px monospace';x.textAlign='right';
+  x.fillText('HI '+String(Math.floor(hi)).padStart(5,'0')+'  '+String(Math.floor(score)).padStart(5,'0'),W-20,35);
+  x.textAlign='center';x.fillStyle='#cfd6dd';x.font='24px system-ui';
+  if(!started)x.fillText('Tap to start',W/2,100);
+  if(over)x.fillText('Game over. Tap to play again',W/2,100);
+}
+function loop(ts){
+  const dt=Math.min(ts-last,50);last=ts;t=ts;
+  update(dt/16.67);draw();requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
