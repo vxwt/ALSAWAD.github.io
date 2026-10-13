@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Face vs Gunmen</title>
+<style>
+  html,body{margin:0;height:100%;background:#0e1116;color:#cfd6dd;font-family:system-ui,sans-serif}
+  body{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;padding:1rem;-webkit-user-select:none;user-select:none}
+  canvas{width:100%;max-width:900px;height:auto;background:#151a21;border-radius:12px;touch-action:none}
+  p{margin:0;font-size:.95rem;color:#8b96a1;text-align:center;line-height:1.5}
+</style>
+</head>
+<body>
+<canvas id="c" width="900" height="260"></canvas>
+<p>Tap the top half of the game to jump. Hold the bottom half to duck.<br>Keyboard: Space or Up to jump, Down to duck.</p>
+<script>
+const c=document.getElementById('c'),x=c.getContext('2d');
+const W=c.width,GROUND=215,PX=3;
+const BODY=[
+"..........#######.",
+"..........##e#####",
+"..........########",
+"..........########",
+"..........####....",
+"..........#######.",
+"#........####.....",
+"#.......#######...",
+"##.....#########..",
+"###...###########.",
+"###..#########.##.",
+".##.###########...",
+"..############....",
+"...##########....."];
+const LEGS=[
+["....####..####....","....##.....##.....","....##.....#......"],
+["....####..####....","....##......##....","....#.......##...."]];
+const BASE=[
+"....####....","....####....","....####....",".....##.....",
+"...######...","...######...","...######...","...######...",
+"...######...","...######...","...######...","...##..##...",
+"...##..##...","...##..##...","...##..##...","..###..###.."];
+function buildHuman(g){
+  const h=BASE.slice();
+  h[g]="gggggg####..";
+  h[g+1]="..g.######..";
+  return h;
+}
+const GUN_ROWS=[4,9];
+const HUMANS=GUN_ROWS.map(buildHuman);
+const HH=16*PX,HW=12*PX;
+let hi=0;try{hi=+localStorage.getItem('dinoHi')||0}catch(e){}
+let dino,obs,bullets,speed,score,over,started,frame,next,last=0,t=0;
+const input={duck:false};
+function reset(){
+  dino={y:GROUND,vy:0,on:true};
+  obs=[];bullets=[];speed=6;score=0;over=false;frame=0;next=80;
+}
+reset();started=false;
+function jump(){
+  if(over){reset();started=true;return}
+  started=true;
+  if(dino.on){dino.vy=-14.5;dino.on=false}
+}
+addEventListener('keydown',e=>{
+  if(e.code==='Space'||e.code==='ArrowUp'){e.preventDefault();jump()}
+  if(e.code==='ArrowDown'){e.preventDefault();input.duck=true}
+});
+addEventListener('keyup',e=>{if(e.code==='ArrowDown')input.duck=false});
+c.addEventListener('pointerdown',e=>{
+  e.preventDefault();
+  const r=c.getBoundingClientRect();
+  const ly=(e.clientY-r.top)/r.height;
+  if(!started||over||ly<=0.5)jump();
+  else input.duck=true;
+});
+addEventListener('pointerup',()=>{input.duck=false});
+addEventListener('pointercancel',()=>{input.duck=false});
+
+function sprite(px,py,color){
+  const all=BODY.concat(dino.on?LEGS[Math.floor(frame/6)%2]:LEGS[0]);
+  for(let r=0;r<all.length;r++)for(let k=0;k<all[r].length;k++){
+    const ch=all[r][k];
+    if(ch==='#'){x.fillStyle=color;x.fillRect(px+k*PX,py+r*PX,PX,PX)}
+    else if(ch==='e'){x.fillStyle='#151a21';x.fillRect(px+k*PX,py+r*PX,PX,PX)}
+  }
+}
+function drawHuman(o){
+  const rows=HUMANS[o.type],top=GROUND-HH;
+  for(let r=0;r<rows.length;r++)for(let k=0;k<rows[r].length;k++){
+    const ch=rows[r][k];
+    if(ch==='.')continue;
+    x.fillStyle=ch==='g'?'#b0bec5':r<4?'#e8b98a':r<11?'#c0392b':'#34495e';
+    x.fillRect(o.x+k*PX,top+r*PX,PX,PX);
+  }
+  if(o.flash>0){
+    x.fillStyle='#ffd54a';
+    x.fillRect(o.x-10,top+GUN_ROWS[o.type]*PX-3,9,9);
+  }
+}
+const DW=68,DH=78,DX=50;
+const FACE=new Image();
+FACE.src='data:image/jpeg;base64,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';
+function face(px,py,col){
+  x.save();
+  x.beginPath();x.ellipse(px+DW/2,py+DH/2,DW/2,DH/2,0,0,Math.PI*2);
+  x.clip();
+  if(FACE.complete&&FACE.naturalWidth)x.drawImage(FACE,px,py,DW,DH);
+  else{x.fillStyle=col;x.fillRect(px,py,DW,DH)}
+  x.restore();
+  x.lineWidth=3;x.strokeStyle=col;
+  x.beginPath();x.ellipse(px+DW/2,py+DH/2,DW/2-1,DH/2-1,0,0,Math.PI*2);x.stroke();
+}
+function update(s){
+  if(!started||over)return;
+  frame+=s;score+=speed*s*0.05;speed=Math.min(12,speed+0.0015*s);
+  const duck=input.duck&&dino.on;
+  dino.vy+=0.75*s*((input.duck&&!dino.on)?2.2:1);
+  dino.y+=dino.vy*s;
+  if(dino.y>=GROUND){dino.y=GROUND;dino.vy=0;dino.on=true}
+  next-=speed*s;
+  if(next<=0){
+    const type=Math.random()<0.5?0:1;
+    const first=W-120-Math.random()*220;
+    const fire=[first];
+    if(score>350&&Math.random()<0.5)fire.push(first-170);
+    obs.push({x:W+20,type,fire,flash:0});
+    next=380+Math.random()*300+speed*20;
+  }
+  for(const o of obs){
+    o.x-=speed*s;
+    if(o.flash>0)o.flash-=s;
+    while(o.fire.length&&o.x<o.fire[0]){
+      o.fire.shift();
+      bullets.push({x:o.x-12,y:GROUND-HH+GUN_ROWS[o.type]*PX+3});
+      o.flash=6;
+    }
+  }
+  for(const b of bullets)b.x-=(speed+5)*s;
+  obs=obs.filter(o=>o.x+HW+10>0);
+  bullets=bullets.filter(b=>b.x>-30);
+  const dx1=DX+8,dx2=DX+(duck?DW*1.25:DW)-8;
+  const dy1=dino.y-(duck?DH*0.4-4:DH-6),dy2=dino.y;
+  let hit=false;
+  for(const o of obs){
+    if(dx2>o.x+6&&dx1<o.x+HW-4&&dy2>GROUND-HH)hit=true;
+  }
+  for(const b of bullets){
+    if(dx2>b.x&&dx1<b.x+14&&dy2>b.y-3&&dy1<b.y+3)hit=true;
+  }
+  if(hit){
+    over=true;
+    if(score>hi){hi=Math.floor(score);try{localStorage.setItem('dinoHi',hi)}catch(e){}}
+  }
+}
+function draw(){
+  x.clearRect(0,0,W,c.height);
+  x.fillStyle='#3a434d';x.fillRect(0,GROUND,W,2);
+  obs.forEach(drawHuman);
+  x.fillStyle='#ffd54a';
+  for(const b of bullets){
+    x.fillRect(b.x,b.y-3,14,6);
+    x.fillStyle='#ff8a3d';x.fillRect(b.x+10,b.y-3,4,6);x.fillStyle='#ffd54a';
+  }
+  const col=`hsl(${(t*0.12)%360},100%,58%)`;
+  if(input.duck&&dino.on){
+    x.save();x.translate(DX,dino.y);x.scale(1.25,0.4);face(0,-DH,col);x.restore();
+  }else{
+    const bob=dino.on&&started&&!over?Math.abs(Math.sin(frame*0.35))*3:0;
+    face(DX,dino.y-DH-bob,col);
+  }
+  x.fillStyle='#8b96a1';x.font='20px monospace';x.textAlign='right';
+  x.fillText('HI '+String(Math.floor(hi)).padStart(5,'0')+'  '+String(Math.floor(score)).padStart(5,'0'),W-20,35);
+  x.textAlign='center';x.fillStyle='#cfd6dd';x.font='24px system-ui';
+  if(!started)x.fillText('Tap to start',W/2,100);
+  if(over)x.fillText('Game over. Tap to play again',W/2,100);
+}
+function loop(ts){
+  const dt=Math.min(ts-last,50);last=ts;t=ts;
+  update(dt/16.67);draw();requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
