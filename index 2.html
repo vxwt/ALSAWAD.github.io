@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RGB Dino</title>
+<style>
+  html,body{margin:0;height:100%;background:#0e1116;color:#cfd6dd;font-family:system-ui,sans-serif}
+  body{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;padding:1rem;touch-action:manipulation;-webkit-user-select:none;user-select:none}
+  canvas{width:100%;max-width:900px;height:auto;background:#151a21;border-radius:12px}
+  p{margin:0;font-size:.95rem;color:#8b96a1;text-align:center}
+</style>
+</head>
+<body>
+<canvas id="c" width="900" height="260"></canvas>
+<p>Tap the screen, press Space, or press the Up arrow to jump.</p>
+<script>
+const c=document.getElementById('c'),x=c.getContext('2d');
+const W=c.width,GROUND=215,PX=3;
+const BODY=[
+"..........#######.",
+"..........##e#####",
+"..........########",
+"..........########",
+"..........####....",
+"..........#######.",
+"#........####.....",
+"#.......#######...",
+"##.....#########..",
+"###...###########.",
+"###..#########.##.",
+".##.###########...",
+"..############....",
+"...##########....."];
+const LEGS=[
+["....####..####....","....##.....##.....","....##.....#......"],
+["....####..####....","....##......##....","....#.......##...."]];
+let hi=0;try{hi=+localStorage.getItem('dinoHi')||0}catch(e){}
+let dino,obs,speed,score,over,started,frame,next,last=0,t=0;
+function reset(){dino={y:GROUND,vy:0,on:true};obs=[];speed=6;score=0;over=false;frame=0;next=80}
+reset();started=false;
+function jump(){
+  if(over){reset();started=true;return}
+  started=true;
+  if(dino.on){dino.vy=-13.5;dino.on=false}
+}
+addEventListener('keydown',e=>{if(e.code==='Space'||e.code==='ArrowUp'){e.preventDefault();jump()}});
+c.addEventListener('pointerdown',e=>{e.preventDefault();jump()});
+function sprite(px,py,color){
+  const rows=BODY.concat(LEGS[Math.floor(frame/6)%2]);
+  const run=!dino.on?LEGS[0]:null;
+  const all=BODY.concat(run||LEGS[Math.floor(frame/6)%2]);
+  for(let r=0;r<all.length;r++)for(let k=0;k<all[r].length;k++){
+    const ch=all[r][k];
+    if(ch==='#'){x.fillStyle=color;x.fillRect(px+k*PX,py+r*PX,PX,PX)}
+    else if(ch==='e'){x.fillStyle='#151a21';x.fillRect(px+k*PX,py+r*PX,PX,PX)}
+  }
+}
+function cactus(o){
+  x.fillStyle='#9aa4ad';
+  x.fillRect(o.x,GROUND-o.h,o.w,o.h);
+  x.fillRect(o.x-8,GROUND-o.h*0.65,8,5);x.fillRect(o.x-8,GROUND-o.h*0.65-14,5,14);
+  x.fillRect(o.x+o.w,GROUND-o.h*0.5,8,5);x.fillRect(o.x+o.w+3,GROUND-o.h*0.5-14,5,14);
+}
+const DW=18*PX,DH=17*PX,DX=50;
+function update(s){
+  if(!started||over)return;
+  frame+=s;score+=speed*s*0.05;speed=Math.min(14,speed+0.0015*s);
+  dino.vy+=0.75*s;dino.y+=dino.vy*s;
+  if(dino.y>=GROUND){dino.y=GROUND;dino.vy=0;dino.on=true}
+  next-=speed*s;
+  if(next<=0){
+    const w=14+Math.random()*14,h=34+Math.random()*30;
+    obs.push({x:W+20,w,h});
+    next=260+Math.random()*320+speed*18;
+  }
+  for(const o of obs){o.x-=speed*s}
+  obs=obs.filter(o=>o.x+o.w+10>0);
+  const dx1=DX+8,dx2=DX+DW-8,dy1=dino.y-DH+6,dy2=dino.y;
+  for(const o of obs){
+    if(dx2>o.x-6&&dx1<o.x+o.w+6&&dy2>GROUND-o.h&&dy1<GROUND){
+      over=true;
+      if(score>hi){hi=Math.floor(score);try{localStorage.setItem('dinoHi',hi)}catch(e){}}
+    }
+  }
+}
+function draw(){
+  x.clearRect(0,0,W,c.height);
+  x.fillStyle='#3a434d';x.fillRect(0,GROUND,W,2);
+  obs.forEach(cactus);
+  const hue=(t*0.12)%360;
+  sprite(DX,dino.y-DH,`hsl(${hue},100%,58%)`);
+  x.fillStyle='#8b96a1';x.font='20px monospace';x.textAlign='right';
+  x.fillText('HI '+String(Math.floor(hi)).padStart(5,'0')+'  '+String(Math.floor(score)).padStart(5,'0'),W-20,35);
+  x.textAlign='center';x.fillStyle='#cfd6dd';x.font='24px system-ui';
+  if(!started)x.fillText('Tap to start',W/2,100);
+  if(over)x.fillText('Game over. Tap to play again',W/2,100);
+}
+function loop(ts){
+  const dt=Math.min(ts-last,50);last=ts;t=ts;
+  update(dt/16.67);draw();requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
